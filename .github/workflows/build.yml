@@ -2,8 +2,6 @@ name: Build mod from uploaded zip
 
 on:
   push:
-    paths:
-      - '**.zip'
   workflow_dispatch:
 
 permissions:
