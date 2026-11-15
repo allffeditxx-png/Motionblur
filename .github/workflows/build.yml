@@ -1,0 +1,59 @@
+name: Build mod from uploaded zip
+
+on:
+  push:
+    paths:
+      - '**.zip'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 9.2.0
+
+      - name: Unzip the uploaded project
+        run: |
+          ZIP=$(ls -t *.zip | head -n 1)
+          echo "Using $ZIP"
+          rm -rf _work && mkdir _work
+          unzip -q "$ZIP" -d _work
+          GRADLE_FILE=$(find _work -name build.gradle | head -n 1)
+          if [ -z "$GRADLE_FILE" ]; then echo "No build.gradle found in the zip"; exit 1; fi
+          echo "PROJECT_DIR=$(dirname "$GRADLE_FILE")" >> $GITHUB_ENV
+
+      - name: Build
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle build --stacktrace
+
+      - name: Pick the mod jar
+        run: |
+          mkdir -p out
+          for f in "$PROJECT_DIR"/build/libs/*.jar; do
+            case "$f" in *-sources.jar|*-dev.jar) ;; *) cp "$f" out/ ;; esac
+          done
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mod-jar
+          path: out/*.jar
+
+      - name: Publish a release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Build ${{ github.run_number }}
+          files: out/*.jar
